@@ -1,0 +1,337 @@
+---
+title: "Reds Take Home Project"
+subtitle: Part 2B
+author: "Jackie Jovanovic"
+date: "Novemeber 8th, 2022"
+output:
+  pdf_document: default
+  html_document:
+    code_folding: hide
+    toc_float: yes
+---
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300&family=Source+Sans+Pro&display=swap" rel="stylesheet">
+<style>
+
+body{
+font-family: 'Source Sans Pro', sans-serif;
+}
+
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load_packages, include=FALSE, message=FALSE, warning=FALSE}
+# load packages
+library(tidyverse)
+library(skimr)
+library(knitr)
+library(kableExtra)
+```
+
+```{r,message=FALSE, warning=FALSE}
+# load data
+library(readxl)
+data <- read_excel("C:/Users/jacki/Desktop/senior/2023 Analytics Internship Problem Dataset.xlsx")
+View(data)
+```
+
+```{r, message=FALSE, warning=FALSE}
+## filter data
+# filter to the pitchers of interest (A and B)
+pitchersAB <- data %>% 
+  filter(PITCHER_KEY %in% c("A", "B"))
+
+# add variable to indicate if INDUCED_VERTICAL_BREAK is missing
+added <- pitchersAB %>% 
+  mutate(missing_vb = case_when(is.na(INDUCED_VERTICAL_BREAK) ~ "missing",
+                                TRUE ~ "present"))
+
+# convert INDUCED_VERTICAL_BREAK to numeric
+added$INDUCED_VERTICAL_BREAK <- as.numeric(added$INDUCED_VERTICAL_BREAK)
+# convert HORIZONTAL_BREAK to numeric
+added$HORIZONTAL_BREAK <- as.numeric(added$HORIZONTAL_BREAK)
+
+```
+Two Reds minor league pitchers, represented as Pitcher A and Pitcher B, have been randomly selected from a dataset containing pitch by pitch data for all NL Central teams at the MLB, AAA, and AA levels. In total there are 268,495 observations. Below are the means of select variables for Pitcher A, Pitcher B, and the overall dataset. This has been provided in order to gain a general understanding of the observations. 
+
+**Pitcher A is right-handed. Pitcher B is left-handed.**
+```{r}
+vars <- c("Release Speed", "Plate Speed", "Spin Rate", "Spin Direction",
+          "Release Height", "Release Extension", "Horizontal Break",
+          "Vertical Approach Angle", "Horizontal Approach Angle")
+Apit_means <- c(89.74, 82.10, 1775.1, 149.98, 5.70, 5.85, 8.70, -6.09, 1.47)
+Bpit_means <- c(86.99, 80.02, 1314.5, 193.5, 5.88, 6.24, 10.19, -6.41, -1.15)
+all_means <- c(87.86, 80.69, 1286.4, 178.2, 5.83, 6.09, 7.62, -6.62, 0.90)
+summaries <- data.frame(vars, all_means, Apit_means, Bpit_means)
+summaries %>% kable(
+  col.names = c("Mean", "Full Data", "Pitcher A", "Pitcher B")
+) %>% kable_styling("striped")
+```
+
+## Exploratory Data Analysis
+#### Pitch Totals
+```{r message=FALSE, warning=FALSE, fig.align='center', fig.width=10}
+# number of pitches by each pitcher
+# pitchersAB %>% 
+#   group_by(PITCHER_KEY) %>% 
+#   ggplot(aes(x = PITCHER_KEY)) + geom_bar()
+added %>% 
+  group_by(PITCHER_KEY, missing_vb) %>% 
+  ggplot(aes(x = PITCHER_KEY, fill = factor(missing_vb))) + 
+  geom_bar(position = "dodge") +
+  geom_text(aes(label = ..count..), stat = "count", colour = "white",
+            vjust = 1.5, position = position_dodge((.9))) +
+  labs(title = "Pitch Totals for Pitchers A and B", 
+       x = "Pitcher", y = "Count", fill = "Induced Vertical Break",
+       caption = "Total count for Pitcher A: 2037\
+       Total count for Pitcher B: 1962") +
+  theme_bw()
+```
+The amount of pitches for each player of interest is fairly equal. This allows for comparison between the pitchers. 
+
+#### Scatter Plot of Induced Vertical Break vs. Release Speed
+
+```{r, message=FALSE, warning=FALSE, fig.align='center', fig.width=10}
+added %>% 
+  group_by(PITCHER_KEY) %>% 
+  ggplot(aes(x = INDUCED_VERTICAL_BREAK, y = RELEASE_SPEED, 
+             color = PITCH_TYPE_KEY)) +
+  geom_point(alpha = 0.4) +
+  # geom_line() +
+  labs(title = "Release Speed vs. Induced Vertical Break", 
+       x = "Induced Vertical Break", y = "Release Speed", color = "Pitcher") +
+  theme_bw() + coord_flip() + facet_wrap(~PITCHER_KEY)
+```
+The graphs are split up by pitcher, a colored by pitch type. Pitcher B's curveball has a faster release speed and more induced vertical break than Pitcher A. Pitcher A throws a lot of sliders, whereas Pitcher B barely uses sliders. 
+Pitcher A has a slightly faster and greater breaking fastball, but Pitcher B's fastball is very close. 
+
+
+#### Induced Vertical Break by Pitch Type for Each Pitcher
+```{r fig.width=10, message=FALSE, warning=FALSE, fig.align='center'}
+added %>% 
+  ggplot(aes(x = factor(PITCH_TYPE_KEY), y = INDUCED_VERTICAL_BREAK)) +
+  geom_jitter(alpha = 0.4, aes(color = PITCHER_KEY),
+              position = position_jitter(0.2)) +
+  labs(x = "Pitch Type", y = "Induced Vertical Break", color = "Pitcher") +
+  theme_bw() +
+  facet_wrap(~PITCHER_KEY)
+```
+
+According to this graph, Pitcher B throws more breaking pitches than Pitcher A. Pitcher B utilizes a curveball much more frequently, almost double the amount of times Pitcher A uses it. Pitcher B also throws more changeups which are considered to be one of the slowest pitches, but do move a lot to deceive the batter. Pitcher A throws sliders more frequently instead, which are a faster breaking pitch. The density of points suggests that Pitcher B has a bigger arsenal than Pitcher A.
+
+#### Pitch results
+```{r, message=FALSE, warning=FALSE, fig.align='center', fig.width=10}
+added %>% 
+  ggplot(aes(x = PITCH_RESULT_KEY, fill = factor(PITCHER_KEY))) +
+  geom_bar(position = "dodge") +
+  geom_text(aes(label = ..count..), stat = "count", colour = "black",
+            vjust = -0.5, position = position_dodge((.9))) +
+  labs(x = "Pitch Result", y = "Count", 
+       fill = "Pitcher") +
+  theme_bw()
+```
+Pitcher A and Pitcher B produce about the same amount of pitch results.
+
+#### Induced Vertical Break vs. Spin Rate
+```{r, message=FALSE, warning=FALSE, fig.align='center', fig.width=10}
+added %>% 
+  group_by(PITCHER_KEY) %>% 
+  ggplot(aes(x = SPIN_RATE, y = INDUCED_VERTICAL_BREAK, color = PITCHER_KEY)) +
+  geom_point(alpha = 0.5) +
+  geom_hline(yintercept = 0, color = "black") +
+  # geom_line() +
+  labs(x = "Spin Rate", y = "Induced Vertical Break", color = "Pitcher") +
+  theme_bw()
+```
+This graph shows that Pitcher A is able to throw a large range of breaking balls. Typically, Pitcher A either throws a pitch with an extreme break, upwards or downwards, or  minimal break. This can be accomplished because of the high spin rate, which is what creates that break. Pitcher B does not have as diverse of a range as is shown by the blue dots focused along the top of the graph and gather around the reference line at 0.  
+
+#### Spin Rate and Horizontal Break
+```{r, , message=FALSE, warning=FALSE, fig.align='center', fig.width=10}
+added %>% 
+  ggplot(aes(x = SPIN_RATE, y = HORIZONTAL_BREAK, color = PITCHER_KEY)) +
+  geom_point(alpha = 0.5) +
+  geom_hline(yintercept = 0, color = "black") +
+  labs(x = "Spin Rate", y = "Horizontal Break", color = "Pitcher") +
+  theme_bw()
+```
+This graph has the same overall shape as the previous one (induced vertical break). There are very clear clusters. On average, Pitcher A has a higher spin rate and is much better at producing positive horizontal break. This aligns with the jitter plot from earlier, since Pitcher B throws more curveballs and changeups which are slower pitches.
+
+### Pitch Location {.tabset}
+
+#### With Regression Line
+```{r, message=FALSE, warning=FALSE, fig.align='center', fig.width=10}
+added %>% 
+  ggplot(aes(x = PLATE_X, y = PLATE_Z, color = PITCHER_KEY)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(se = FALSE) +
+  labs(title = "Location of the Ball When it Reaches the Plate",
+       x = "Horizontal Location", y = "Height", color = "Pitcher") +
+  theme_bw() +
+  facet_wrap(~BAT_SIDE_KEY) +
+  theme(legend.position = "bottom")
+```
+
+#### Without Regression Line
+```{r, message=FALSE, warning=FALSE, fig.align='center', fig.width=10}
+added %>% 
+  ggplot(aes(x = PLATE_X, y = PLATE_Z, color = PITCHER_KEY)) +
+  geom_point(alpha = 0.5) +
+  labs(title = "Location of the Ball When it Reaches the Plate",
+       x = "Horizontal Location", y = "Height", color = "Pitcher") +
+  theme_bw() +
+  facet_wrap(~BAT_SIDE_KEY) +
+  theme(legend.position = "bottom")
+```
+
+#### Separated by Pitcher
+```{r, message=FALSE, warning=FALSE, fig.align='center', fig.width=10}
+added %>% 
+  ggplot(aes(x = PLATE_X, y = PLATE_Z, color = BAT_SIDE_KEY)) +
+  geom_point(alpha = 0.5) +
+  labs(title = "Location of the Ball When it Reaches the Plate",
+       x = "Horizontal Location", y = "Height", color = "Batter Handedness") +
+  theme_bw() +
+  facet_wrap(~PITCHER_KEY) +
+  theme(legend.position = "bottom") +
+  scale_color_viridis_d()
+```
+
+### {-}
+
+This plot represents pitch location and is split up by batter handedness and the colors represent the pitcher. The lines help highlight the "X" shape present in both graphs. Regardless of the handedness of the batter, both pitchers throw along the same line. The different in slope makes sense since Pitcher A is right-handed and Pitcher B is left-handed. The last tab is separated by pitcher instead of batter handedness. This highlights how Pitcher A throws in a tighter area while Pitcher B spreads out a bit more. Since the strike zone depends on the height of the batter, it is difficult to determine from this graph alone if one Pitcher produces more strikes than the other.
+
+#### Release Extension
+```{r, message=FALSE, warning=FALSE, fig.align='center', fig.width=10}
+added %>% 
+  ggplot(aes(x = RELEASE_EXTENSION, fill = PITCHER_KEY)) +
+  geom_density(alpha = 0.5) +
+  labs(x = "Release Extension", y = "Density", fill = "Pitcher") +
+  theme_bw()
+```
+Based off of this graph Pitcher B is likely taller because they have a greater release extension. 
+
+#### Plate Speed
+```{r, message=FALSE, warning=FALSE, fig.align='center', fig.width=10}
+added %>% 
+  ggplot(aes(x = PLATE_SPEED, fill = PITCHER_KEY)) +
+  geom_density(alpha = 0.5) +
+  labs(x = "Plate Speed", y = "Density", fill = "Pitcher") +
+  theme_bw() 
+  # theme(legend.position = "bottom")
+```
+The spikes indicate the speed of the different pitches in the pitchers arsenal. The rightmost bumps are the their fastballs.
+
+#### Spin Rate
+```{r, message=FALSE, warning=FALSE, fig.align='center', fig.width=10}
+added %>% 
+  ggplot(aes(x = SPIN_RATE, fill = PITCHER_KEY)) +
+  geom_density(alpha = 0.5) +
+  labs(x = "Spin Rate", y = "Density", fill = "Pitcher") +
+  theme_bw()
+```
+This concurs with previous graphs because that Pitcher A generally throws pitches with higher spin rates.
+
+### Pitch Outcome {.tabset}
+#### Ball
+```{r, message=FALSE, warning=FALSE, fig.align='center', fig.width=10}
+added %>% 
+  ggplot(aes(x = B, fill = factor(PITCHER_KEY))) +
+  geom_bar(position = "dodge") +
+  geom_text(aes(label = ..count..), stat = "count", colour = "black",
+            vjust = -0.5, position = position_dodge((.9))) +
+  scale_x_discrete(limits = c(0:1)) +
+  labs(x = "Ball", y = "Count", fill = "Pitcher") +
+  theme_bw()
+```
+
+#### Strike
+```{r, message=FALSE, warning=FALSE, fig.align='center', fig.width=10}
+added %>% 
+  ggplot(aes(x = S, fill = factor(PITCHER_KEY))) +
+  geom_bar(position = "dodge") +
+  geom_text(aes(label = ..count..), stat = "count", colour = "black",
+            vjust = -0.5, position = position_dodge((.9))) +
+  scale_x_discrete(limits = c(0:1)) +
+  labs(x = "Strike", y = "Count", fill = "Pitcher") +
+  theme_bw()
+```
+
+#### Out
+```{r, message=FALSE, warning=FALSE, fig.align='center', fig.width=10}
+added %>% 
+  ggplot(aes(x = O, fill = factor(PITCHER_KEY))) +
+  geom_bar(position = "dodge") +
+  geom_text(aes(label = ..count..), stat = "count", colour = "black",
+            vjust = -0.5, position = position_dodge((.9))) +
+  scale_x_discrete(limits = c(0:2)) +
+  labs(x = "Out", y = "Count", fill = "Pitcher") +
+  theme_bw()
+```
+
+#### Bunt
+```{r, message=FALSE, warning=FALSE, fig.align='center', fig.width=10}
+added %>% 
+  ggplot(aes(x = BU, fill = factor(PITCHER_KEY))) +
+  geom_bar(position = "dodge") +
+  geom_text(aes(label = ..count..), stat = "count", colour = "black",
+            vjust = -0.5, position = position_dodge((.9))) +
+  scale_x_discrete(limits = c(0:1)) +
+  labs(x = "Bunt", y = "Count", fill = "Pitcher") +
+  theme_bw()
+```
+
+#### Fly Ball
+```{r, message=FALSE, warning=FALSE, fig.align='center', fig.width=10}
+added %>% 
+  ggplot(aes(x = FB, fill = factor(PITCHER_KEY))) +
+  geom_bar(position = "dodge") +
+  geom_text(aes(label = ..count..), stat = "count", colour = "black",
+            vjust = -0.5, position = position_dodge((.9))) +
+  scale_x_discrete(limits = c(0:1)) +
+  labs(x = "Fly Ball", y = "Count", fill = "Pitcher") +
+  theme_bw()
+```
+
+#### Ground Ball
+```{r, message=FALSE, warning=FALSE, fig.align='center', fig.width=10}
+added %>% 
+  ggplot(aes(x = GB, fill = factor(PITCHER_KEY))) +
+  geom_bar(position = "dodge") +
+  geom_text(aes(label = ..count..), stat = "count", colour = "black",
+            vjust = -0.5, position = position_dodge((.9))) +
+  scale_x_discrete(limits = c(0:1)) +
+  labs(x = "Ground Ball", y = "Count", fill = "Pitcher") +
+  theme_bw()
+```
+
+#### Line Drive
+```{r, message=FALSE, warning=FALSE, fig.align='center', fig.width=10}
+added %>% 
+  ggplot(aes(x = LD, fill = factor(PITCHER_KEY))) +
+  geom_bar(position = "dodge") +
+  geom_text(aes(label = ..count..), stat = "count", colour = "black",
+            vjust = -0.5, position = position_dodge((.9))) +
+  scale_x_discrete(limits = c(0:1)) +
+  labs(x = "Line Drive", y = "Count", fill = "Pitcher") +
+  theme_bw()
+```
+
+#### Putout
+```{r, message=FALSE, warning=FALSE, fig.align='center', fig.width=10}
+added %>% 
+  ggplot(aes(x = PU, fill = factor(PITCHER_KEY))) +
+  geom_bar(position = "dodge") +
+  geom_text(aes(label = ..count..), stat = "count", colour = "black",
+            vjust = -0.5, position = position_dodge((.9))) +
+  scale_x_discrete(limits = c(0:1)) +
+  labs(x = "Putout", y = "Count", fill = "Pitcher") +
+  theme_bw()
+```
+
+### {-}
+
